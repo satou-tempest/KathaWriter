@@ -1,0 +1,71 @@
+name: Build Katha Writer debug APK
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v6
+
+      - name: Locate Android Gradle project
+        id: project-root
+        shell: bash
+        run: |
+          if [[ -f "settings.gradle.kts" || -f "settings.gradle" || -f "settings.gradle.dcl" ]]; then
+            project_dir="."
+          elif [[ -f "KathaWriter/settings.gradle.kts" || -f "KathaWriter/settings.gradle" || -f "KathaWriter/settings.gradle.dcl" ]]; then
+            project_dir="KathaWriter"
+          else
+            settings_file="$(find . -maxdepth 5 -type f \
+              \( -name settings.gradle.kts -o -name settings.gradle -o -name settings.gradle.dcl \) \
+              -not -path './.git/*' -print -quit)"
+            if [[ -z "$settings_file" ]]; then
+              echo "Could not find a Gradle settings file. Expected it in the repository root or inside a project folder such as ./KathaWriter/." >&2
+              echo "Repository files at the top level:" >&2
+              ls -la >&2
+              exit 1
+            fi
+            project_dir="$(dirname "$settings_file")"
+          fi
+
+          if [[ ! -d "$project_dir/app" ]]; then
+            echo "Found Gradle settings at '$project_dir' but no app/ module was found there." >&2
+            exit 1
+          fi
+
+          echo "dir=$project_dir" >> "$GITHUB_OUTPUT"
+          echo "Using Android project directory: $project_dir"
+
+      - name: Set up Java 17
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v4
+
+      - name: Install Android 36 SDK packages
+        run: sdkmanager "platforms;android-36" "build-tools;36.0.0"
+
+      - name: Install Gradle 9.6.0
+        uses: gradle/actions/setup-gradle@v6
+        with:
+          gradle-version: '9.6.0'
+
+      - name: Build debug APK
+        working-directory: ${{ steps.project-root.outputs.dir }}
+        run: gradle --no-daemon --stacktrace assembleDebug
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: katha-writer-v0.1-beta-debug
+          path: ${{ steps.project-root.outputs.dir }}/app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
