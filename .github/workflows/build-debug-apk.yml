@@ -13,6 +13,21 @@ jobs:
       - name: Check out source
         uses: actions/checkout@v6
 
+      # The Android GitHub web UI on mobile cannot upload folders easily.
+      # If the repository contains the source ZIP, extract it automatically.
+      - name: Extract uploaded Katha Writer ZIP (if present)
+        shell: bash
+        run: |
+          archive="$(find . -maxdepth 1 -type f \
+            \( -iname 'KathaWriter*.zip' -o -iname 'katha-writer*.zip' \) \
+            -print -quit)"
+          if [[ -n "$archive" ]]; then
+            echo "Extracting source archive: $archive"
+            unzip -o "$archive" -d .
+          else
+            echo "No Katha Writer ZIP found; checking repository files directly."
+          fi
+
       - name: Locate Android Gradle project
         id: project-root
         shell: bash
